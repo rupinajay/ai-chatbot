@@ -79,19 +79,43 @@ export async function POST(request: Request) {
 
     const userType: UserType = session.user.type;
 
+    let messageCount = 0;
+    let chat = null;
     let messagesFromDb: any[] = [];
-    try {
-      // These operations will fail if the database is not available.
-      // We catch the error and continue with an empty message history.
-      const chat = await getChatById({ id });
 
-      if (chat && chat.userId !== session.user.id) {
-        return new ChatSDKError('forbidden:chat').toResponse();
+    try {
+      messageCount = await getMessageCountByUserId({
+        id: session.user.id,
+        differenceInHours: 24,
+      });
+
+      if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
+        return new ChatSDKError('rate_limit:chat').toResponse();
+      }
+
+      chat = await getChatById({ id });
+
+      if (!chat) {
+        const title = await generateTitleFromUserMessage({
+          message,
+        });
+
+        await saveChat({
+          id,
+          userId: session.user.id,
+          title,
+          visibility: selectedVisibilityType,
+        });
+      } else {
+        if (chat.userId !== session.user.id) {
+          return new ChatSDKError('forbidden:chat').toResponse();
+        }
       }
 
       messagesFromDb = await getMessagesByChatId({ id });
     } catch (error) {
-      console.log('Database not available, using in-memory chat session.');
+      console.log('Database not available, using in-memory chat session');
+      // Continue without database - this allows basic chat functionality
     }
 
     const uiMessages = [...convertToUIMessages(messagesFromDb), message];
@@ -105,9 +129,6 @@ export async function POST(request: Request) {
       country,
     };
 
-    // The following database operations are wrapped in try/catch blocks
-    // to allow the chat to function in an in-memory mode when the
-    // database is not available.
     try {
       await saveMessages({
         messages: [
@@ -122,14 +143,14 @@ export async function POST(request: Request) {
         ],
       });
     } catch (error) {
-      console.log('Could not save user message to database.');
+      console.log('Could not save user message to database');
     }
 
+    const streamId = generateUUID();
     try {
-      const streamId = generateUUID();
       await createStreamId({ streamId, chatId: id });
     } catch (error) {
-      console.log('Could not create stream ID in database.');
+      console.log('Could not create stream ID in database');
     }
 
     // DIRECT OPENAI APPROACH: Use the working OpenAI client directly
@@ -204,17 +225,6 @@ export async function POST(request: Request) {
         start(controller) {
           console.log('🔄 Sending response via SSE...');
 
-          // Send message start (required by useChat)
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: 'message-start',
-                id: messageId,
-                role: 'assistant',
-              })}\n\n`,
-            ),
-          );
-
           // Send text delta with the response
           controller.enqueue(
             encoder.encode(
@@ -222,21 +232,6 @@ export async function POST(request: Request) {
                 type: 'text-delta',
                 id: messageId,
                 delta: responseText,
-              })}\n\n`,
-            ),
-          );
-
-          // Send message finish (required by useChat)
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: 'message-finish',
-                id: messageId,
-                message: {
-                  id: messageId,
-                  role: 'assistant',
-                  parts: [{ type: 'text', text: responseText }],
-                },
               })}\n\n`,
             ),
           );
@@ -311,12 +306,7 @@ export async function POST(request: Request) {
 
     // Response is handled by the stream above
   } catch (error) {
-    // This is a temporary fix to allow in-memory chat to function
-    // without a database connection. It prevents the frontend from
-    // entering an error state when database operations fail.
-    if (error instanceof ChatSDKError && error.message.includes('Database not available')) {
-        console.log('Continuing with in-memory session despite database error.');
-    } else if (error instanceof ChatSDKError) {
+    if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
 
@@ -331,8 +321,7 @@ export async function POST(request: Request) {
     }
 
     console.error('Unhandled error in chat API:', error);
-    // Do not return an error response here for the in-memory case
-    // return new ChatSDKError('offline:chat').toResponse();
+    return new ChatSDKError('offline:chat').toResponse();
   }
 }
 

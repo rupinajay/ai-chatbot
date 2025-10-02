@@ -6,7 +6,7 @@ import equal from 'fast-deep-equal';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import { useMessages } from '@/hooks/use-messages';
 import type { ChatMessage } from '@/lib/types';
-import { useDataStream } from './data-stream-provider';
+
 import { Conversation, ConversationContent } from './elements/conversation';
 import { ArrowDownIcon } from 'lucide-react';
 
@@ -33,6 +33,17 @@ function PureMessages({
   isArtifactVisible,
   selectedModelId,
 }: MessagesProps) {
+  // Debug: Log messages received by Messages component
+  console.log('📋 Messages component received:', {
+    messagesCount: messages.length,
+    status,
+    messages: messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      partsCount: m.parts?.length,
+      firstPartText: m.parts?.[0]?.text?.substring(0, 50),
+    })),
+  });
   const {
     containerRef: messagesContainerRef,
     endRef: messagesEndRef,
@@ -43,8 +54,6 @@ function PureMessages({
     chatId,
     status,
   });
-
-  useDataStream();
 
   useEffect(() => {
     if (status === 'submitted') {
@@ -120,13 +129,24 @@ function PureMessages({
 }
 
 export const Messages = memo(PureMessages, (prevProps, nextProps) => {
-  if (prevProps.isArtifactVisible && nextProps.isArtifactVisible) return true;
+  // Fix: Only skip re-render when both artifacts are visible AND nothing else changed
+  if (prevProps.isArtifactVisible && nextProps.isArtifactVisible) {
+    return (
+      prevProps.status === nextProps.status &&
+      prevProps.selectedModelId === nextProps.selectedModelId &&
+      prevProps.messages.length === nextProps.messages.length &&
+      equal(prevProps.messages, nextProps.messages) &&
+      equal(prevProps.votes, nextProps.votes)
+    );
+  }
 
+  // Re-render if any of these changed
   if (prevProps.status !== nextProps.status) return false;
   if (prevProps.selectedModelId !== nextProps.selectedModelId) return false;
   if (prevProps.messages.length !== nextProps.messages.length) return false;
   if (!equal(prevProps.messages, nextProps.messages)) return false;
   if (!equal(prevProps.votes, nextProps.votes)) return false;
 
-  return false;
+  // If nothing changed, skip re-render
+  return true;
 });

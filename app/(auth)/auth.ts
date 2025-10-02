@@ -41,33 +41,50 @@ export const {
     Credentials({
       credentials: {},
       async authorize({ email, password }: any) {
-        const users = await getUser(email);
+        try {
+          const users = await getUser(email);
 
-        if (users.length === 0) {
+          if (users.length === 0) {
+            await compare(password, DUMMY_PASSWORD);
+            return null;
+          }
+
+          const [user] = users;
+
+          if (!user.password) {
+            await compare(password, DUMMY_PASSWORD);
+            return null;
+          }
+
+          const passwordsMatch = await compare(password, user.password);
+
+          if (!passwordsMatch) return null;
+
+          return { ...user, type: 'regular' };
+        } catch (error) {
+          // If database is not available, reject authentication
+          console.log('Database not available, authentication disabled');
           await compare(password, DUMMY_PASSWORD);
           return null;
         }
-
-        const [user] = users;
-
-        if (!user.password) {
-          await compare(password, DUMMY_PASSWORD);
-          return null;
-        }
-
-        const passwordsMatch = await compare(password, user.password);
-
-        if (!passwordsMatch) return null;
-
-        return { ...user, type: 'regular' };
       },
     }),
     Credentials({
       id: 'guest',
       credentials: {},
       async authorize() {
-        const [guestUser] = await createGuestUser();
-        return { ...guestUser, type: 'guest' };
+        try {
+          const [guestUser] = await createGuestUser();
+          return { ...guestUser, type: 'guest' };
+        } catch (error) {
+          // If database is not available, create a temporary guest user
+          console.log('Database not available, creating temporary guest user');
+          return {
+            id: `guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            email: `guest-${Date.now()}@temp.local`,
+            type: 'guest' as const,
+          };
+        }
       },
     }),
   ],

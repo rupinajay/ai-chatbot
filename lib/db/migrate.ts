@@ -8,8 +8,15 @@ config({
 });
 
 const runMigrate = async () => {
-  if (!process.env.POSTGRES_URL) {
-    throw new Error('POSTGRES_URL is not defined');
+  if (
+    !process.env.POSTGRES_URL ||
+    process.env.POSTGRES_URL === 'your-postgres-url-here'
+  ) {
+    console.log('⚠️ POSTGRES_URL not configured, skipping migrations...');
+    console.log(
+      '💡 Set up a PostgreSQL database to enable chat history and user features',
+    );
+    process.exit(0);
   }
 
   const connection = postgres(process.env.POSTGRES_URL, { max: 1 });

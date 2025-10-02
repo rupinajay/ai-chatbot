@@ -1,18 +1,18 @@
-<a href="https://chat.vercel.ai/">
-  <img alt="Next.js 14 and App Router-ready AI chatbot." src="app/(chat)/opengraph-image.png">
-  <h1 align="center">Chat SDK</h1>
+<a href="https://gravixlayer.com/">
+  <img alt="Next.js 15 and App Router-ready AI chatbot powered by Gravix Layer." src="app/(chat)/opengraph-image.png">
+  <h1 align="center">Gravix Layer Chat</h1>
 </a>
 
 <p align="center">
-    Chat SDK is a free, open-source template built with Next.js and the AI SDK that helps you quickly build powerful chatbot applications.
+    A powerful AI chatbot built with Next.js and the AI SDK, powered by Gravix Layer's open-source model inference platform.
 </p>
 
 <p align="center">
-  <a href="https://chat-sdk.dev"><strong>Read Docs</strong></a> ·
+  <a href="QUICK_START.md"><strong>Quick Start</strong></a> ·
   <a href="#features"><strong>Features</strong></a> ·
   <a href="#model-providers"><strong>Model Providers</strong></a> ·
-  <a href="#deploy-your-own"><strong>Deploy Your Own</strong></a> ·
-  <a href="#running-locally"><strong>Running locally</strong></a>
+  <a href="GRAVIX_SETUP.md"><strong>Full Setup</strong></a> ·
+  <a href="#testing"><strong>Testing</strong></a>
 </p>
 <br/>
 
@@ -36,15 +36,13 @@
 
 ## Model Providers
 
-This template uses the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) to access multiple AI models through a unified interface. The default configuration includes [xAI](https://x.ai) models (`grok-2-vision-1212`, `grok-3-mini`) routed through the gateway.
+This template uses [Gravix Layer](https://gravixlayer.com/) to access multiple open-source AI models through their inference platform. The default configuration includes Meta's Llama models (`meta-llama/llama-3.1-8b-instruct`, `meta-llama/llama-3.1-70b-instruct`).
 
-### AI Gateway Authentication
+### Gravix Layer Authentication
 
-**For Vercel deployments**: Authentication is handled automatically via OIDC tokens.
+You need to provide a Gravix Layer API key by setting the `GRAVIXLAYER_API_KEY` environment variable in your `.env.local` file. Get your API key from [Gravix Layer's documentation](https://docs.gravixlayer.com/docs/getting-started).
 
-**For non-Vercel deployments**: You need to provide an AI Gateway API key by setting the `AI_GATEWAY_API_KEY` environment variable in your `.env.local` file.
-
-With the [AI SDK](https://ai-sdk.dev/docs/introduction), you can also switch to direct LLM providers like [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Cohere](https://cohere.com/), and [many more](https://ai-sdk.dev/providers/ai-sdk-providers) with just a few lines of code.
+Gravix Layer provides access to many open-source models with OpenAI-compatible APIs, making it easy to switch between different models with just a configuration change.
 
 ## Deploy Your Own
 
@@ -54,17 +52,34 @@ You can deploy your own version of the Next.js AI Chatbot to Vercel with one cli
 
 ## Running locally
 
-You will need to use the environment variables [defined in `.env.example`](.env.example) to run Next.js AI Chatbot. It's recommended you use [Vercel Environment Variables](https://vercel.com/docs/projects/environment-variables) for this, but a `.env` file is all that is necessary.
+## Quick Start
 
-> Note: You should not commit your `.env` file or it will expose secrets that will allow others to control access to your various AI and authentication provider accounts.
+1. **Get your Gravix Layer API key** from [Gravix Layer Documentation](https://docs.gravixlayer.com/docs/getting-started)
 
-1. Install Vercel CLI: `npm i -g vercel`
-2. Link local instance with Vercel and GitHub accounts (creates `.vercel` directory): `vercel link`
-3. Download your environment variables: `vercel env pull`
+2. **Set up environment variables**:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Fill in your `GRAVIXLAYER_API_KEY` and other required variables.
+
+3. **Install and run**:
+   ```bash
+   pnpm install
+   pnpm dev
+   ```
+
+Your Gravix Layer-powered chatbot will be running on [localhost:3000](http://localhost:3000).
+
+📖 **For detailed setup instructions, see [GRAVIX_SETUP.md](GRAVIX_SETUP.md)**
+
+## Testing
+
+Test your Gravix Layer integration:
 
 ```bash
-pnpm install
-pnpm dev
+pnpm run test:gravix
 ```
 
-Your app template should now be running on [localhost:3000](http://localhost:3000).
+This will verify your API key and model access.
+
+> Note: You should not commit your `.env.local` file as it contains sensitive API keys.

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Chat Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .message { margin: 10px 0; padding: 15px; border-radius: 8px; }
+        .user { background: #e3f2fd; text-align: right; }
+        .assistant { background: #f3e5f5; }
+        .error { background: #ffebee; color: red; }
+        .log { background: #f5f5f5; font-size: 12px; margin: 2px 0; padding: 5px; border-radius: 4px; }
+        .input-area { margin: 20px 0; display: flex; gap: 10px; }
+        input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        .send { background: #2196f3; color: white; }
+        .clear { background: #f44336; color: white; }
+        .loading { opacity: 0.6; }
+    </style>
+</head>
+<body>
+    <h1>Simple Chat Test (No useChat Hook)</h1>
+    
+    <div class="input-area">
+        <input type="text" id="input" placeholder="Type your message..." value="Hello, how are you?">
+        <button class="send" onclick="sendMessage()" id="sendBtn">Send</button>
+        <button class="clear" onclick="clearAll()">Clear</button>
+    </div>
+    
+    <div id="messages"></div>
+    <div id="logs"></div>
+
+    <script>
+        let chatId = 'simple-test-' + Date.now();
+        
+        function log(msg) {
+            const div = document.createElement('div');
+            div.className = 'log';
+            div.textContent = new Date().toISOString() + ': ' + msg;
+            document.getElementById('logs').appendChild(div);
+            console.log(msg);
+        }
+        
+        function addMessage(role, content) {
+            const div = document.createElement('div');
+            div.className = 'message ' + role;
+            div.innerHTML = '<strong>' + role + ':</strong> ' + content;
+            document.getElementById('messages').appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function clearAll() {
+            document.getElementById('logs').innerHTML = '';
+            document.getElementById('messages').innerHTML = '';
+            chatId = 'simple-test-' + Date.now();
+            log('Cleared all messages, new chat ID: ' + chatId);
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('input');
+            const sendBtn = document.getElementById('sendBtn');
+            const text = input.value.trim();
+            
+            if (!text) return;
+            
+            // Disable input during request
+            input.disabled = true;
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending...';
+            sendBtn.classList.add('loading');
+            
+            addMessage('user', text);
+            log('Sending message: ' + text);
+            
+            try {
+                const response = await fetch('/api/chat-simple', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: chatId,
+                        message: {
+                            id: 'msg-' + Date.now(),
+                            role: 'user',
+                            parts: [{ type: 'text', text: text }]
+                        },
+                        selectedChatModel: 'chat-model',
+                        selectedVisibilityType: 'private'
+                    })
+                });
+                
+                log('Response status: ' + response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log('HTTP Error: ' + errorText);
+                    addMessage('error', 'HTTP Error: ' + response.status + ' - ' + errorText);
+                    return;
+                }
+                
+                const data = await response.json();
+                log('Response data: ' + JSON.stringify(data, null, 2));
+                
+                if (data.success && data.message) {
+                    const assistantText = data.text || data.message.parts[0]?.text || 'No text content';
+                    log('Assistant response: ' + assistantText);
+                    addMessage('assistant', assistantText);
+                } else {
+                    log('Error in response: ' + (data.error || 'Unknown error'));
+                    addMessage('error', data.error || 'Unknown error occurred');
+                }
+                
+            } catch (error) {
+                log('Request failed: ' + error.message);
+                addMessage('error', 'Request failed: ' + error.message);
+            } finally {
+                // Re-enable input
+                input.disabled = false;
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send';
+                sendBtn.classList.remove('loading');
+                input.value = '';
+                input.focus();
+            }
+        }
+        
+        // Allow Enter key to send message
+        document.getElementById('input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        log('Simple chat test loaded');
+        document.getElementById('input').focus();
+    </script>
+</body>
+</html>

@@ -23,7 +23,6 @@ import { DocumentPreview } from './document-preview';
 import { MessageReasoning } from './message-reasoning';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import type { ChatMessage } from '@/lib/types';
-import { useDataStream } from './data-stream-provider';
 
 const PurePreviewMessage = ({
   chatId,
@@ -46,13 +45,22 @@ const PurePreviewMessage = ({
   requiresScrollPadding: boolean;
   isArtifactVisible: boolean;
 }) => {
+  // Debug: Log each message being rendered
+  console.log(`💬 Rendering message ${message.id}:`, {
+    role: message.role,
+    partsCount: message.parts?.length,
+    parts: message.parts?.map((p) => ({
+      type: p.type,
+      textLength: p.text?.length,
+      textPreview: p.text?.substring(0, 100),
+    })),
+    isLoading,
+  });
   const [mode, setMode] = useState<'view' | 'edit'>('view');
 
   const attachmentsFromMessage = message.parts.filter(
     (part) => part.type === 'file',
   );
-
-  useDataStream();
 
   return (
     <motion.div
@@ -112,6 +120,16 @@ const PurePreviewMessage = ({
             const { type } = part;
             const key = `message-${message.id}-part-${index}`;
 
+            console.log(
+              `🔍 Processing part ${index} of message ${message.id}:`,
+              {
+                type,
+                hasText: !!part.text,
+                textLength: part.text?.length,
+                textContent: part.text,
+              },
+            );
+
             if (type === 'reasoning' && part.text?.trim().length > 0) {
               return (
                 <MessageReasoning
@@ -122,8 +140,27 @@ const PurePreviewMessage = ({
               );
             }
 
-            if (type === 'text') {
+            // Handle step-start, step-finish, and other step types
+            if (type === 'step-start' || type === 'step-finish') {
+              console.log(`🔄 Skipping step part: ${type}`);
+              return null; // Skip step parts, they're just markers
+            }
+
+            // Handle text-delta parts (streaming)
+            if (type === 'text-delta') {
+              console.log(`📝 Processing text-delta part:`, part);
+              const textContent = part.textDelta || part.delta || '';
+
               if (mode === 'view') {
+                const sanitizedText = sanitizeText(textContent);
+                console.log(
+                  `🎯 About to render text-delta for ${message.role}:`,
+                  {
+                    sanitizedText,
+                    sanitizedLength: sanitizedText?.length,
+                  },
+                );
+
                 return (
                   <div key={key}>
                     <MessageContent
@@ -140,7 +177,45 @@ const PurePreviewMessage = ({
                           : undefined
                       }
                     >
-                      <Response>{sanitizeText(part.text)}</Response>
+                      <Response>{sanitizedText}</Response>
+                    </MessageContent>
+                  </div>
+                );
+              }
+            }
+
+            if (type === 'text') {
+              console.log(`📝 Processing text part for ${message.role}:`, {
+                partText: part.text,
+                textLength: part.text?.length,
+                textPreview: part.text?.substring(0, 200),
+                mode,
+              });
+
+              if (mode === 'view') {
+                const sanitizedText = sanitizeText(part.text);
+                console.log(`🎯 About to render text for ${message.role}:`, {
+                  sanitizedText,
+                  sanitizedLength: sanitizedText?.length,
+                });
+
+                return (
+                  <div key={key}>
+                    <MessageContent
+                      data-testid="message-content"
+                      className={cn({
+                        'w-fit break-words rounded-2xl px-3 py-2 text-right text-white':
+                          message.role === 'user',
+                        'bg-transparent px-0 py-0 text-left':
+                          message.role === 'assistant',
+                      })}
+                      style={
+                        message.role === 'user'
+                          ? { backgroundColor: '#006cff' }
+                          : undefined
+                      }
+                    >
+                      <Response>{sanitizedText}</Response>
                     </MessageContent>
                   </div>
                 );
@@ -270,6 +345,27 @@ const PurePreviewMessage = ({
             }
           })}
 
+          {/* Fallback: Try to render any text content from any part */}
+          {message.role === 'assistant' &&
+            message.parts?.length > 0 &&
+            (() => {
+              // Look for any text content in any part
+              const textContent = message.parts
+                .map((p) => p.text || p.textDelta || p.delta || '')
+                .filter(Boolean)
+                .join('');
+
+              console.log('🔍 Fallback text search result:', {
+                textContent,
+                length: textContent.length,
+              });
+
+              if (textContent && textContent.trim()) {
+                return null;
+              }
+              return null;
+            })()}
+
           {!isReadonly && (
             <MessageActions
               key={`action-${message.id}`}
@@ -289,6 +385,7 @@ const PurePreviewMessage = ({
 export const PreviewMessage = memo(
   PurePreviewMessage,
   (prevProps, nextProps) => {
+    // Re-render if any of these changed
     if (prevProps.isLoading !== nextProps.isLoading) return false;
     if (prevProps.message.id !== nextProps.message.id) return false;
     if (prevProps.requiresScrollPadding !== nextProps.requiresScrollPadding)
@@ -296,7 +393,8 @@ export const PreviewMessage = memo(
     if (!equal(prevProps.message.parts, nextProps.message.parts)) return false;
     if (!equal(prevProps.vote, nextProps.vote)) return false;
 
-    return false;
+    // If nothing changed, skip re-render
+    return true;
   },
 );
 

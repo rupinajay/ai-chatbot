@@ -19,19 +19,23 @@ export async function GET(request: Request) {
     return new ChatSDKError('unauthorized:vote').toResponse();
   }
 
-  const chat = await getChatById({ id: chatId });
+  try {
+    const chat = await getChatById({ id: chatId });
 
-  if (!chat) {
-    return new ChatSDKError('not_found:chat').toResponse();
+    if (!chat) {
+      return new ChatSDKError('not_found:chat').toResponse();
+    }
+
+    if (chat.userId !== session.user.id) {
+      return new ChatSDKError('forbidden:vote').toResponse();
+    }
+
+    const votes = await getVotesByChatId({ id: chatId });
+    return Response.json(votes, { status: 200 });
+  } catch (error) {
+    console.log('Database not available, returning empty votes');
+    return Response.json([], { status: 200 });
   }
-
-  if (chat.userId !== session.user.id) {
-    return new ChatSDKError('forbidden:vote').toResponse();
-  }
-
-  const votes = await getVotesByChatId({ id: chatId });
-
-  return Response.json(votes, { status: 200 });
 }
 
 export async function PATCH(request: Request) {
@@ -55,21 +59,26 @@ export async function PATCH(request: Request) {
     return new ChatSDKError('unauthorized:vote').toResponse();
   }
 
-  const chat = await getChatById({ id: chatId });
+  try {
+    const chat = await getChatById({ id: chatId });
 
-  if (!chat) {
-    return new ChatSDKError('not_found:vote').toResponse();
+    if (!chat) {
+      return new ChatSDKError('not_found:vote').toResponse();
+    }
+
+    if (chat.userId !== session.user.id) {
+      return new ChatSDKError('forbidden:vote').toResponse();
+    }
+
+    await voteMessage({
+      chatId,
+      messageId,
+      type: type,
+    });
+
+    return new Response('Message voted', { status: 200 });
+  } catch (error) {
+    console.log('Database not available, vote not saved');
+    return new Response('Vote acknowledged (not saved)', { status: 200 });
   }
-
-  if (chat.userId !== session.user.id) {
-    return new ChatSDKError('forbidden:vote').toResponse();
-  }
-
-  await voteMessage({
-    chatId,
-    messageId,
-    type: type,
-  });
-
-  return new Response('Message voted', { status: 200 });
 }

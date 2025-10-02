@@ -1,6 +1,6 @@
 'use client';
 
-import { DefaultChatTransport } from 'ai';
+import { DefaultChatTransport, type DataUIPart } from 'ai';
 import { useChat } from '@ai-sdk/react';
 import { useEffect, useState, useRef } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
@@ -20,7 +20,7 @@ import { useSearchParams } from 'next/navigation';
 import { useChatVisibility } from '@/hooks/use-chat-visibility';
 import { useAutoResume } from '@/hooks/use-auto-resume';
 import { ChatSDKError } from '@/lib/errors';
-import type { Attachment, ChatMessage } from '@/lib/types';
+import type { Attachment, ChatMessage, CustomUIDataTypes } from '@/lib/types';
 import type { AppUsage } from '@/lib/usage';
 import { useDataStream } from './data-stream-provider';
 import {
@@ -66,7 +66,7 @@ export function Chat({
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
   const currentModelIdRef = useRef(currentModelId);
-  
+
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
   }, [currentModelId]);
@@ -85,28 +85,39 @@ export function Chat({
     experimental_throttle: 100,
     generateId: generateUUID,
     transport: new DefaultChatTransport({
-      api: '/api/chat',
+      api: '/api/chat/inmemory',
       fetch: fetchWithErrorHandlers,
-      prepareSendMessagesRequest({ messages, id, body }) {
+      prepareSendMessagesRequest({ messages }) {
         return {
           body: {
-            id,
-            message: messages.at(-1),
-            selectedChatModel: currentModelIdRef.current,
-            selectedVisibilityType: visibilityType,
-            ...body,
+            messages,
           },
         };
       },
     }),
-    onData: (dataPart) => {
-      setDataStream((ds) => (ds ? [...ds, dataPart] : []));
-      if (dataPart.type === 'data-usage') setUsage(dataPart.data);
+    onData: dataPart => {
+      console.log('🔔 onData received:', dataPart);
+      // The `dataPart` is of a generic type here.
+      // We assert it to the specific type expected by our data stream.
+      setDataStream(ds => [
+        ...(ds || []),
+        dataPart as DataUIPart<CustomUIDataTypes>,
+      ]);
+      if (dataPart.type === 'data-usage') {
+        setUsage(dataPart.data as AppUsage);
+      }
     },
     onFinish: () => {
+      console.log('✅ onFinish called');
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
+      console.error('🚨 useChat onError:', error);
+      // Don't show an error toast if the database is unavailable.
+      // The chat will still work in-memory.
+      if (error.message.includes('Database not available')) {
+        return;
+      }
       if (error instanceof ChatSDKError) {
         // Check if it's a credit card error
         if (
@@ -140,6 +151,13 @@ export function Chat({
     }
   }, [query, sendMessage, hasAppendedQuery, id]);
 
+  useEffect(() => {
+    console.log('💬 Messages updated:', {
+      count: messages.length,
+      messages: messages.map(m => ({ id: m.id, role: m.role, hasContent: !!m.parts })),
+    });
+  }, [messages]);
+
   const { data: votes } = useSWR<Array<Vote>>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
     fetcher,
@@ -154,6 +172,30 @@ export function Chat({
     resumeStream,
     setMessages,
   });
+
+  // Debug: Track message changes
+  useEffect(() => {
+    console.log('🔍 Messages changed:', {
+      count: messages.length,
+      status,
+      lastMessage: messages[messages.length - 1],
+    });
+
+    // Deep debug: Log each message's content
+    messages.forEach((msg, index) => {
+      const firstPart = msg.parts?.[0];
+      console.log(`📝 Message ${index}:`, {
+        id: msg.id,
+        role: msg.role,
+        parts: msg.parts,
+        partsCount: msg.parts?.length,
+        firstPartType: firstPart?.type,
+        firstPartText: firstPart?.type === 'text' ? firstPart.text : undefined,
+        textLength:
+          firstPart?.type === 'text' ? firstPart.text.length : undefined,
+      });
+    });
+  }, [messages, status]);
 
   return (
     <>

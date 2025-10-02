@@ -11,10 +11,25 @@ import { convertToUIMessages } from '@/lib/utils';
 export default async function Page(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const { id } = params;
-  const chat = await getChatById({ id });
+
+  let chat = null;
+  let messagesFromDb: any[] = [];
+
+  try {
+    chat = await getChatById({ id });
+
+    if (chat) {
+      messagesFromDb = await getMessagesByChatId({ id });
+    }
+  } catch (error) {
+    console.log('Database not available, creating new chat session');
+    // Redirect to home page for new chat since we can't load existing chats without database
+    redirect('/');
+  }
 
   if (!chat) {
-    notFound();
+    // If no chat found, redirect to home for new chat
+    redirect('/');
   }
 
   const session = await auth();
@@ -32,10 +47,6 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
       return notFound();
     }
   }
-
-  const messagesFromDb = await getMessagesByChatId({
-    id,
-  });
 
   const uiMessages = convertToUIMessages(messagesFromDb);
 

@@ -94,7 +94,19 @@ export function getTrailingMessageId({
 }
 
 export function sanitizeText(text: string) {
-  return text.replace('<has_function_call>', '');
+  console.log('🧹 Sanitizing text:', {
+    originalLength: text?.length,
+    originalPreview: text?.substring(0, 100),
+  });
+
+  const sanitized = text.replace('<has_function_call>', '');
+
+  console.log('🧹 Sanitized result:', {
+    sanitizedLength: sanitized?.length,
+    sanitizedPreview: sanitized?.substring(0, 100),
+  });
+
+  return sanitized;
 }
 
 export function convertToUIMessages(messages: DBMessage[]): ChatMessage[] {

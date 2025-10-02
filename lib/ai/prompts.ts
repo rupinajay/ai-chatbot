@@ -33,7 +33,7 @@ Do not update document right after creating it. Wait for user feedback or reques
 `;
 
 export const regularPrompt =
-  'You are a friendly assistant! Keep your responses concise and helpful.';
+  'You are a helpful AI assistant powered by Gravix Layer. Keep your responses concise, accurate, and helpful.';
 
 export interface RequestHints {
   latitude: Geo['latitude'];
