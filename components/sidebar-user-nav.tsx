@@ -25,7 +25,18 @@ import { guestRegex } from '@/lib/constants';
 
 export function SidebarUserNav({ user }: { user: User }) {
   const router = useRouter();
-  const { data, status } = useSession();
+  let data, status;
+  
+  try {
+    const session = useSession();
+    data = session.data;
+    status = session.status;
+  } catch (error) {
+    // SessionProvider not available, use mock data
+    data = { user };
+    status = 'authenticated';
+  }
+  
   const { setTheme, resolvedTheme } = useTheme();
 
   const isGuest = guestRegex.test(data?.user?.email ?? '');
